@@ -6,22 +6,45 @@ const SOCKET_URL = "http://localhost:5001"; // or your deployed backend
 
 export function useRouteSocket() {
   const [routeData, setRouteData] = useState(null);
+  const [connected, setConnected] = useState(false);
 
   useEffect(() => {
-    const socket = io(SOCKET_URL);
+    const socket = io(SOCKET_URL, {
+      transports: ['websocket'],
+      autoConnect: true,
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      reconnectionAttempts: 5
+    });
 
     socket.on("connect", () => {
       console.log("🟢 Connected to /route WebSocket");
+      setConnected(true);
+      // Request initial route data
+      socket.emit("get_route");
+    });
+
+    socket.on("disconnect", () => {
+      console.log("🔴 Disconnected from /route WebSocket");
+      setConnected(false);
+    });
+
+    socket.on("error", (error) => {
+      console.error("❌ Socket error:", error);
     });
 
     socket.on("route", (data) => {
-      console.log("📡 Route update received:", data);
+      console.log("📛 Route update received:", data);
       setRouteData(data);
     });
 
-    // Optionally emit every 30 seconds
+    // Request route updates every 30 seconds
     const interval = setInterval(() => {
-      socket.emit("get_route");
+      if (connected) {
+        console.log("🔄 Requesting route update");
+        socket.emit("get_route");
+      }
     }, 30000);
 
     return () => {
@@ -30,5 +53,5 @@ export function useRouteSocket() {
     };
   }, []);
 
-  return routeData;
+  return { routeData, connected };
 }
