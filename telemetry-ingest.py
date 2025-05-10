@@ -3,13 +3,22 @@ import signal
 import json
 import orjson
 import csv
+from pathlib import Path
 from azure.eventhub.aio import EventHubProducerClient
 from azure.eventhub import EventData
 
 # Configuration values for Event Hub and data processing
 EVENT_HUB_CONNECTION_STR = "your_connection_string"  # Connection string for Azure Event Hub
 EVENT_HUB_NAME = "your_event_hub"  # Name of the Event Hub to send data to
-CSV_FILE = "wsdot_loops.csv"  # Path to the CSV file containing telemetry data
+
+# Define the output CSV file location inside a 'data' directory
+BASE_DIR = Path(__file__).parent
+DATA_DIR = BASE_DIR / "data"
+CSV_FILE = DATA_DIR / "wsdot_loops.csv"
+
+# Ensure 'data' directory exists
+DATA_DIR.mkdir(exist_ok=True)
+
 BATCH_SIZE = 100  # Maximum number of telemetry records to send in each batch
 INTERVAL_SECONDS = 10  # Time interval (in seconds) between data transmission loops
 
@@ -24,12 +33,27 @@ async def send_telemetry():
             with open(CSV_FILE, newline='') as csvfile:
                 reader = csv.DictReader(csvfile)  # Read the CSV file as a dictionary
                 for row in reader:
-                    batch.append(orjson.dumps(row))  # Serialize each row using orjson for efficiency
-                    if len(batch) == BATCH_SIZE:  # Check if the batch size limit is reached
-                        await producer.send_batch([EventData(body=data) for data in batch])  # Send batch to Event Hub
+                    # Ensure only the expected fields are transmitted
+                    formatted_data = {
+                        "AverageTime": row.get("AverageTime", "N/A"),
+                        "CurrentTime": row.get("CurrentTime", "N/A"),
+                        "Description": row.get("Description", ""),
+                        "Distance": row.get("Distance", 0),
+                        "EndPoint": row.get("EndPoint", ""),
+                        "Name": row.get("Name", ""),
+                        "StartPoint": row.get("StartPoint", ""),
+                        "TimeUpdated": row.get("TimeUpdated", ""),
+                        "TravelTimeID": row.get("TravelTimeID", "")
+                    }
+                    batch.append(orjson.dumps(formatted_data))  # Serialize the formatted data
+
+                    if len(batch) == BATCH_SIZE:  # Send data in batches
+                        await producer.send_batch([EventData(body=data) for data in batch])
                         batch = []  # Reset the batch after sending
-                if batch:  # Send any remaining telemetry data that didn’t fit the batch size exactly
+            
+                if batch:  # Send any remaining telemetry data
                     await producer.send_batch([EventData(body=data) for data in batch])
+            
             await asyncio.sleep(INTERVAL_SECONDS)  # Wait before processing the next batch
 
 def graceful_shutdown(loop):
