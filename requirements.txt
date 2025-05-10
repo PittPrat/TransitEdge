@@ -1,0 +1,11 @@
+fastapi==0.104.1
+uvicorn==0.24.0
+python-dotenv==1.0.0
+requests==2.31.0
+phoenix-trace==0.1.0
+redis==5.0.1
+chromadb==0.4.18
+crewai==0.11.0
+langchain==0.0.352
+pandas==2.1.4
+lightgbm==4.1.0
